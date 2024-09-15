@@ -13,7 +13,8 @@
 # Will ask RomFile, Source Directory, Target Directory, Leader (sec), Trailer (sec)
 # Search Source Directory for all Hex text files with Hex extension add the romfile at begining of hex and convert to intel hex from wav file saving them
 # in the Target Directory with an Index file representing the files converted with start and end address.
-# Wav format is mono at at 22050Hz bit rate where bit 0 => 1200Hz and bit 1 =>2400Hz
+# Wav format is mono at at 22050Hz bit rate where bit 0 as 1200Hz and bit 1 as 2400Hz
+# The HUG1802/HEC1802/ETI-660 computers need bit 0 as 500Hz and bit 1 as 1000Hz
 # The Wav file metadata is written with the start and end address of program as Title and the name as Album
 # If required Leader and Trailer will add the number in seconds of bit 1 at the begining and end of the file.
 # Note: that the Hex file is in 2 byte format with a speace delimiting pairs all in one line. No line feeds allowed. 
