@@ -159,9 +159,10 @@ def write_file(TargetFile,FileData,NewLine):
 
 # Write tag
 def write_tag(filename,text1,text2):
-    with taglib.File(filename) as file:    
-        file.tags["ALBUM"] = [text1]
-        file.tags["TITLE"] = [text2]
+    with taglib.File(filename) as file:
+        file.tags["ARTIST"] = [text2]    
+        file.tags["ALBUM"] = [text2]
+        file.tags["TITLE"] = [text1]
         file.save()
 
 def PromptHex(prompt, default=None):
