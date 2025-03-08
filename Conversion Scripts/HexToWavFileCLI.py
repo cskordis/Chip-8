@@ -13,8 +13,9 @@
 # Will ask RomFile, Source Directory, Target Directory, Leader (sec), Trailer (sec)
 # Search Source Directory for all Hex text files with Hex extension add the romfile at begining of hex and convert to intel hex from wav file saving them
 # in the Target Directory with an Index file representing the files converted with start and end address.
-# Wav format is mono at at 22050Hz bit rate where bit 0 as 1200Hz and bit 1 as 2400Hz
+# Wav format is mono at at 22050Hz bit rate where bit 0 as 1200Hz and bit 1 as 2400Hz and Odd Parity
 # The HUG1802/HEC1802/ETI-660 computers need bit 0 as 500Hz and bit 1 as 1000Hz
+# The Cosmac VIP computers need bit 0 as 800Hz and bit 1 as 2000Hz with little endian
 # The Wav file metadata is written with the start and end address of program as Title and the name as Album
 # If required Leader and Trailer will add the number in seconds of bit 1 at the begining and end of the file.
 # Note: that the Hex file is in 2 byte format with a speace delimiting pairs all in one line. No line feeds allowed. 
@@ -35,6 +36,9 @@ ONES_FREQ = 2400       # Hz (per KCS)
 ZERO_FREQ = 1200       # Hz (per KCS)
 AMPLITUDE = 225        # Amplitude of generated square waves
 CENTER    = 128        # Center point of generated waves
+LEADER    = 4          # Default seconds for leader
+TRAILER   = 0          # Default seconds for trailer
+VIP       = 0          # Are you a Cosmac VIP
 
 # Create a single square wave cycle of a given frequency
 def make_square_wave(freq,framerate):
@@ -68,21 +72,35 @@ def parity(x):
 # Take a single byte value as binary and turn it into a bytearray representing
 # the associated waveform along with the required start and parity bits.
 def encode_byte(byteval):
- 
     binval=HexToBin(byteval)
-    s = binval
+     
+    if (VIP==0):
+        s = binval
+    else:      
+        s = binval[::-1]
+    
     b = bytearray()
     b.extend(map(ord, s))
-    # The start bit (0)
-    encoded = bytearray(zero_pulse)
+    
+    # The start bit
+    if (STARTBIT == 0):
+        encoded = bytearray(zero_pulse)
+    else:
+        encoded = bytearray(one_pulse)
+    
     # 8 data bits
     for bit in b:
         if (bit==49):
             encoded.extend(one_pulse)
         else:
             encoded.extend(zero_pulse)
+    
     # Add parity bit
-    encoded.extend(zero_pulse if (parity(int(byteval,16))) else one_pulse)
+    if (VIP==0):
+        encoded.extend(zero_pulse if (parity(int(byteval,16))) else one_pulse)
+    else:
+        encoded.extend(one_pulse if (parity(int(byteval,16))) else zero_pulse)  
+        
     return encoded
 
 # A generator to divide a sequence into chunks of n units.
@@ -135,8 +153,9 @@ def write_wav(filename,data,leader,trailer):
     # Write the leader
     if leader:
         for x in range(leader):
-            w.writeframes(one_pulse*(int(FRAMERATE/len(one_pulse))))
- 
+            if (VIP==1):w.writeframes(zero_pulse*(int(FRAMERATE/len(zero_pulse))))
+            else: w.writeframes(one_pulse*(int(FRAMERATE/len(one_pulse))))
+             
     # Encode the actual data
     for byteval in data:
         if byteval!='':
@@ -145,7 +164,8 @@ def write_wav(filename,data,leader,trailer):
     # Write the trailer
     if trailer:
         for x in range(trailer):
-            w.writeframes(one_pulse*(int(FRAMERATE/len(one_pulse))))
+            if (VIP==1):w.writeframes(zero_pulse*(int(FRAMERATE/len(zero_pulse))))
+            else: w.writeframes(one_pulse*(int(FRAMERATE/len(one_pulse))))
     w.close()
 
 # Write file
@@ -160,9 +180,9 @@ def write_file(TargetFile,FileData,NewLine):
 # Write tag
 def write_tag(filename,text1,text2):
     with taglib.File(filename) as file:
-        file.tags["ARTIST"] = [text2]    
-        file.tags["ALBUM"] = [text2]
-        file.tags["TITLE"] = [text1]
+        file.tags["ARTIST"] = [text1]    
+        file.tags["ALBUM"] = [text1]
+        file.tags["TITLE"] = [text2]
         file.save()
 
 def PromptHex(prompt, default=None):
@@ -197,13 +217,23 @@ if __name__ == '__main__':
     init(autoreset=True)
     print(f'{Fore.RED}{Style.BRIGHT}Hexadecimal To Kansas City Standard Wav File Conversion\n')
     print(f'{Fore.YELLOW}{Style.BRIGHT}Kansas City Standard Settings')
+    
+    if click.confirm(f'{Fore.BLUE}{Style.BRIGHT}Is this for a Cosmac VIP?',default='Y'):
+        VIP       = 1
+        ONES_FREQ = 800
+        ZERO_FREQ = 2000
+        LEADER    = 8
+        TRAILER   = 0
+        STARTBIT  = 1
+            
     if click.confirm(f'{Fore.YELLOW}Do you want to export wav files?',default='Y'):
-        ONES_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 1 Frequency Hz' ,default=str(ONES_FREQ), type=click.Choice(['300','500','600','1000','1200','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ONES_FREQ)+'> :'))
-        ZERO_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 0 Frequency Hz' ,default=str(ZERO_FREQ), type=click.Choice(['300','500','600','1200','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ZERO_FREQ)+'> :'))
+        ONES_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 1 Frequency Hz' ,default=str(ONES_FREQ), type=click.Choice(['300','500','600','800','1000','1200','2000','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ONES_FREQ)+'> :'))
+        ZERO_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 0 Frequency Hz' ,default=str(ZERO_FREQ), type=click.Choice(['300','500','600','800','1200','2000','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ZERO_FREQ)+'> :'))
         FRAMERATE = int(click.prompt(f'{Fore.YELLOW}Framerate Hz' ,default=str(FRAMERATE), type=click.Choice(['4800','9600','11025','22050','44100','48000']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(FRAMERATE)+'> :'))
         AMPLITUDE = int(click.prompt(f'{Fore.YELLOW}Amplitude' ,default=str(AMPLITUDE), type=click.IntRange(0, 255),hide_input=False,show_default=False,prompt_suffix=' <'+str(AMPLITUDE)+'> :'))
-        Leader = int(click.prompt(f'{Fore.YELLOW}Leader in seconds' ,default=2,type=click.IntRange(0, 60),hide_input=False,show_default=False,prompt_suffix=' <2> :'))
-        Trailer = int(click.prompt(f'{Fore.YELLOW}Trailer in seconds',default=0,type=click.IntRange(0, 60),hide_input=False,show_default=False,prompt_suffix=' <0> :'))
+        Leader = int(click.prompt(f'{Fore.YELLOW}Leader in seconds' ,default=str(LEADER),type=click.IntRange(0, 60),hide_input=False,show_default=False,prompt_suffix=' <'+str(LEADER)+'> :'))
+        Trailer = int(click.prompt(f'{Fore.YELLOW}Trailer in seconds',default=str(TRAILER),type=click.IntRange(0, 60),hide_input=False,show_default=False,prompt_suffix=' <'+str(TRAILER)+'> :'))
+        StartBit = int(click.prompt(f'{Fore.YELLOW}Start Bit 0 or 1',default=str(STARTBIT),type=click.IntRange(0, 1),hide_input=False,show_default=False,prompt_suffix=' <'+str(STARTBIT)+'> :'))
         WavFileFlag=1
         
         # Create the wave patterns that encode 1s and 0s
