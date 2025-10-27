@@ -18,7 +18,8 @@
 # The Cosmac VIP computers need bit 0 as 800Hz and bit 1 as 2000Hz with little endian
 # The Wav file metadata is written with the start and end address of program as Title and the name as Album
 # If required Leader and Trailer will add the number in seconds of bit 1 at the begining and end of the file.
-# Note: that the Hex file is in 2 byte format with a speace delimiting pairs all in one line. No line feeds allowed. 
+# Note: that the Hex file is in 2 byte format with a speace delimiting pairs all in one line. No line feeds allowed.
+# If VIP the data files will be padded in 256byte chunks with FF to fill the page
 
 #Takes the contents of any file and encodes it into a Kansas
 #City Standard WAV file, that when played will upload data via the
@@ -198,6 +199,12 @@ def PromptHex(prompt, default=None):
         else:
             break
     return resp
+ 
+def pad_list_to_chunk_size(data: list, chunk_size: int = 256, pad_value=0) -> list:
+    """Pads input list to the next multiple of chunk_size with pad_value."""
+    current_len = len(data)
+    padding_needed = (chunk_size - (current_len % chunk_size)) % chunk_size
+    return data + [pad_value] * padding_needed
     
 if __name__ == '__main__':
     import os,sys
@@ -209,10 +216,12 @@ if __name__ == '__main__':
         print("Usage : %s" % sys.argv[0],file=sys.stderr)
         raise SystemExit(1)
   
-    iHexFlag=0
-    iHexDirFlag=0
-    WavFileFlag=0
-    StudioRom=0
+    iHexFlag   = 0
+    iHexDirFlag= 0
+    WavFileFlag= 0
+    StudioRom  = 0
+    STARTBIT   = 0
+    VIP        = 0
     os.system('cls')
     init(autoreset=True)
     print(f'{Fore.RED}{Style.BRIGHT}Hexadecimal To Kansas City Standard Wav File Conversion\n')
@@ -228,7 +237,7 @@ if __name__ == '__main__':
             
     if click.confirm(f'{Fore.YELLOW}Do you want to export wav files?',default='Y'):
         ONES_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 1 Frequency Hz' ,default=str(ONES_FREQ), type=click.Choice(['300','500','600','800','1000','1200','2000','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ONES_FREQ)+'> :'))
-        ZERO_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 0 Frequency Hz' ,default=str(ZERO_FREQ), type=click.Choice(['300','500','600','800','1200','2000','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ZERO_FREQ)+'> :'))
+        ZERO_FREQ = int(click.prompt(f'{Fore.YELLOW}Bit 0 Frequency Hz' ,default=str(ZERO_FREQ), type=click.Choice(['300','500','600','800','1000','1200','2000','2400','4800','9600']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(ZERO_FREQ)+'> :'))
         FRAMERATE = int(click.prompt(f'{Fore.YELLOW}Framerate Hz' ,default=str(FRAMERATE), type=click.Choice(['4800','9600','11025','22050','44100','48000']),hide_input=False,show_choices=False,show_default=False,prompt_suffix=' <'+str(FRAMERATE)+'> :'))
         AMPLITUDE = int(click.prompt(f'{Fore.YELLOW}Amplitude' ,default=str(AMPLITUDE), type=click.IntRange(0, 255),hide_input=False,show_default=False,prompt_suffix=' <'+str(AMPLITUDE)+'> :'))
         Leader = int(click.prompt(f'{Fore.YELLOW}Leader in seconds' ,default=str(LEADER),type=click.IntRange(0, 60),hide_input=False,show_default=False,prompt_suffix=' <'+str(LEADER)+'> :'))
@@ -329,10 +338,15 @@ if __name__ == '__main__':
             Data = RomDataStr[:1024] + Data[256:]
         else:
             ##Data = RomDataStr[:1536] + Data
-            Data=RomDataStr+Data
-        
-        DataLen=len(Data)
-        pages=str(-(-DataLen // 256))
+            Data=RomDataStr+Data   
+            
+        # pad out file to 256 chunks if VIP
+        if (VIP==1):
+            Data=pad_list_to_chunk_size(Data,256,"FF")
+     
+        DataLen=len(Data)  
+        pages=str(-(-DataLen // 256))      
+                     
         Address1=hex(int(Origin,16)).replace('x','').upper()
         Address1=Address1.rjust(4,'0')
         Address2=hex(DataLen+int(Origin,16)-1).replace('x','')
